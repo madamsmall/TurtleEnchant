@@ -1,10 +1,12 @@
 ## Interface: 11200
-## Title: TurtleEnchant |cff7fff7f -Ace2-|r
+## Title:  |cff7fff7f Turtle|rEnchant
 ## Author: Madamsmall
-## Notes: Turtle Wow Enchanting made Simple
+## Notes: Enchanting made Simple
 ## Version: 1.0.0
 ## OptionalDeps: Ace2
 ## SavedVariables: TurtleEnchantDB
+## LoadOnDemand: 1
+## LoadWith: Blizzard_TradeSkillUI, Blizzard_CraftUI
 ## X-Category: Tradeskill
 
 Libs\AceLibrary\AceLibrary.lua

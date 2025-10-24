@@ -19,7 +19,7 @@ TurtleEnchant:RegisterDB("TurtleEnchantDB");
 
 --Register default settings
 TurtleEnchant:RegisterDefaults("profile", {		
-		Sort     = L.Armor
+		Sort     = L.Bonus
 });
 
 ----------------------------------------------------------------------------------------------------
@@ -115,7 +115,7 @@ end
 
 function TurtleEnchant:OnEnable()
 	--Reset our saved data if it is from the old version of TurtleEnchant
-	if (not self.db.profile.LowestShown) or (not self.db.profile.Sort) then
+	if (not self.db.profile.Sort) then
 		self:ResetDB("profile");
 	end
 
@@ -147,6 +147,7 @@ function TurtleEnchant:OnEnable()
 
 	self:UpdateCraftFrame();
 
+	self:CreateSearchBox(CraftFrame);
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
 end
 
@@ -167,14 +168,14 @@ function TurtleEnchant:UpdateCraftFrame()
 		if self.IsEnabled then
 			self:CreateUserEnchantDB();
 		end
-		CraftFrame_Update();
+		CraftFrame_Update();			
 	end
 end
 
 function TurtleEnchant:CRAFT_UPDATE()
 	self:LevelDebug(2, "CRAFT_UPDATE event fired, invalidating data");
 	--Invalidate our db to ensure it is not wrongfully used
-	self.UserEnchantDB.IsInvalidated = true;
+	self.UserEnchantDB.IsInvalidated = true;		
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -262,10 +263,16 @@ function TurtleEnchant:TableExpanded(tableIndex)
 	return not self.UserEnchantDB.IsCollapsed[tableIndex];
 end
 
---Checks if the item should be visible, using dropdowns and lowest shown
+--Checks if the item should be visible, using dropdowns and searchBox
 function TurtleEnchant:IsVisible(craftData)
-	--TODO: Implement filtering
-
+ 	local filter = self:GetSearchFilter()  
+    local name = craftData[1];
+	if not filter or strfind(strlower(name), filter, 1, true) then
+            return true;
+        else
+            -- filtered out
+			return false;
+        end    
 	--If we got this far, there is nothing to stop the item from being displayed
 	return true;
 end
@@ -301,21 +308,6 @@ end
 -- Note to myself:
 -- Need to organize these in some more logical fashion
 ----------------------------------------------------------------------------------------------------
---------------------------------------------------
--- Function to auto-filter in the case of trading
---------------------------------------------------
-function TurtleEnchant:CraftFrame_Show()
-	if TradeFrame:IsVisible() then
-		--If this value is non-nil, that means we have an item in the "Do Not Trade" section of the
-		--Other player's trade window, because of this, filter by that armor type, since we are
-		--Pretty much guarenteed to be wanting to enchant it
-		if GetTradeTargetItemLink(7) ~= nil then
-			local link = GetTradeTargetItemLink(7)
-			local itemId = gsub(link, self.ItemRegex, "%1")
-			local _, _, _, _, _, SubType = GetItemInfo(itemId)
-		end
-	end
-end
 --------------------------------------------------
 -- Overall functions, return basic data
 -- Hooked to return data we have instead
@@ -657,4 +649,78 @@ function TurtleEnchant:TooltipSetCraftSpell(tooltip, id)
 			return;
 		end
 	end
+end
+
+-- Create a simple search box and filtering support
+function TurtleEnchant:CreateSearchBox(parent)
+    if self.searchBox then return end
+
+    -- ensure a valid parent; CraftFrame is the enchanting UI
+    parent = parent or (CraftFrame and CraftFrame) or UIParent
+
+    local sb = CreateFrame("EditBox", "TurtleEnchantSearchBox", parent, "InputBoxTemplate")
+    if sb.SetSize then
+        sb:SetSize(220, 20)
+    else
+        sb:SetWidth(220)
+        sb:SetHeight(20)
+    end
+    sb:SetPoint("TOPLEFT", parent, "TOPLEFT", 60, -35) -- adjust offsets as needed
+
+    sb:SetParent(parent)
+    if parent.GetFrameLevel and sb.SetFrameLevel then
+        sb:SetFrameLevel((parent:GetFrameLevel() or 0) + 5)
+    end
+    if parent.GetFrameStrata and sb.SetFrameStrata then
+        sb:SetFrameStrata(parent:GetFrameStrata() or "MEDIUM")
+    end
+
+    sb:SetAutoFocus(false)
+    sb:SetMaxLetters(64)
+    if sb.SetTextInsets then sb:SetTextInsets(6,6,0,0) end
+    sb:ClearFocus()
+    if sb.SetPropagateKeyboardInput then
+        sb:SetPropagateKeyboardInput(true)
+    end
+
+    -- Focus only on click
+    sb:SetScript("OnMouseDown", function(_, button)
+        if button == "LeftButton" then sb:SetFocus() end
+    end)
+    sb:SetScript("OnShow", function()
+        sb:ClearFocus()    end)
+    sb:SetScript("OnHide", function() sb:ClearFocus() end)
+
+    sb:SetScript("OnEscapePressed", function()
+        sb:SetText("")
+        sb:ClearFocus()
+        self:SetSearchFilter("")
+        self:UpdateCraftFrame()
+    end)
+    sb:SetScript("OnEnterPressed", function() sb:ClearFocus() end)
+
+    local label = sb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    label:SetPoint("LEFT", sb, "LEFT", 4, 0)
+    label:SetText("Search...")
+    label:SetJustifyH("LEFT")
+    label:Show()
+
+    sb:SetScript("OnTextChanged", function()
+        local txt = sb:GetText() or ""
+        if txt == "" then label:Show() else label:Hide() end
+        self:SetSearchFilter(txt)
+        if self.UserEnchantDB then self.UserEnchantDB.IsInvalidated = true end
+        self:UpdateCraftFrame()
+    end)
+
+    sb:Show()
+    self.searchBox = sb
+end
+
+function TurtleEnchant:SetSearchFilter(text)
+    self.filter = (text and text ~= "") and strlower(text) or nil
+end
+
+function TurtleEnchant:GetSearchFilter()
+    return self.filter
 end
