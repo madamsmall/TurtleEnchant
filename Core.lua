@@ -148,6 +148,8 @@ function TurtleEnchant:OnEnable()
 	self:UpdateCraftFrame();
 
 	self:CreateSearchBox(CraftFrame);
+	self:CreateSortDewdrop(CraftFrame);
+
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
 end
 
@@ -660,12 +662,12 @@ function TurtleEnchant:CreateSearchBox(parent)
 
     local sb = CreateFrame("EditBox", "TurtleEnchantSearchBox", parent, "InputBoxTemplate")
     if sb.SetSize then
-        sb:SetSize(220, 20)
+        sb:SetSize(180, 20)
     else
-        sb:SetWidth(220)
+        sb:SetWidth(180)
         sb:SetHeight(20)
     end
-    sb:SetPoint("TOPLEFT", parent, "TOPLEFT", 60, -35) -- adjust offsets as needed
+    sb:SetPoint("TOPLEFT", parent, "TOPLEFT", 60, -37) -- adjust offsets as needed
 
     sb:SetParent(parent)
     if parent.GetFrameLevel and sb.SetFrameLevel then
@@ -723,4 +725,87 @@ end
 
 function TurtleEnchant:GetSearchFilter()
     return self.filter
+end
+
+-- Create a Dewdrop-2.0 sort button that opens the menu below the button, toggles and closes on outside click.
+function TurtleEnchant:CreateSortDewdrop(parent)
+    if self.sortBtn or not Dewdrop then return end
+    parent = parent or (CraftFrame and CraftFrame) or UIParent
+
+    local btn = CreateFrame("Button", "TurtleEnchantSortBtn", parent, "UIPanelButtonTemplate")
+    btn:SetHeight(20)
+	btn:SetWidth(60)
+    if self.searchBox then
+        btn:SetPoint("LEFT", self.searchBox, "RIGHT", 8, 0)
+    else
+        btn:SetPoint("TOPLEFT", parent, "TOPLEFT", 300, -40)
+    end
+
+    local function openBelow(anchor, childrenFunc)
+        -- preferred param names for Dewdrop-2.0 (best-effort)
+        local ok = pcall(function()
+            Dewdrop:Open(anchor,
+                'children', childrenFunc,
+                'point', 'TOPLEFT', 'relativePoint', 'BOTTOMLEFT',
+                'offsetX', 0, 'offsetY', -5)
+        end)
+        if not ok then
+            -- fallback: simpler call
+            pcall(function() Dewdrop:Open(anchor, 'children', childrenFunc) end)
+        end
+    end
+
+    local function updateText()
+        local label = (self.db and self.db.profile and self.db.profile.Sort) or L.Bonus
+        if btn.SetText then btn:SetText(tostring(label)) end
+    end
+
+    btn:SetScript("OnClick", function()
+        -- toggle behavior
+        if self._dewdropOpen and self._dewdropAnchor == btn then
+            pcall(function() Dewdrop:Close() end)
+            self._dewdropOpen = nil
+            self._dewdropAnchor = nil
+            return
+        end
+
+        self._dewdropOpen = true
+        self._dewdropAnchor = btn
+
+        openBelow(btn, function()
+            -- Example items: adjust L.Bonus / L.Armor to your localization table
+            Dewdrop:AddLine(
+                'text', L.Bonus,
+                'checked', (self.db.profile.Sort == L.Bonus),
+                'closeWhenClicked', true,
+                'func', function()
+                    self.db.profile.Sort = L.Bonus
+                    updateText()
+                    if self.UserEnchantDB then self.UserEnchantDB.IsInvalidated = true end
+                    pcall(function() self:UpdateCraftFrame() end)
+                    pcall(function() Dewdrop:Close() end)
+                    self._dewdropOpen = nil
+                    self._dewdropAnchor = nil
+                end
+            )
+
+            Dewdrop:AddLine(
+                'text', L.Armor,
+                'checked', (self.db.profile.Sort == L.Armor),
+                'closeWhenClicked', true,
+                'func', function()
+                    self.db.profile.Sort = L.Armor
+                    updateText()
+                    if self.UserEnchantDB then self.UserEnchantDB.IsInvalidated = true end
+                    pcall(function() self:UpdateCraftFrame() end)
+                    pcall(function() Dewdrop:Close() end)
+                    self._dewdropOpen = nil
+                    self._dewdropAnchor = nil
+                end
+            )           
+        end)
+    end)
+
+    self.sortBtn = btn
+    updateText()
 end
