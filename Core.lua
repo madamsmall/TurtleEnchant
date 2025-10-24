@@ -133,6 +133,7 @@ function TurtleEnchant:OnEnable()
 	self:Hook("ExpandCraftSkillLine");
 	self:Hook("CollapseCraftSkillLine");
 	self:Hook("SelectCraft");
+	
 	self:Hook("GetCraftSelectionIndex");
 	self:Hook("DoCraft");
 	self:Hook("GetCraftIcon");
@@ -149,6 +150,7 @@ function TurtleEnchant:OnEnable()
 
 	self:CreateSearchBox(CraftFrame);
 	self:CreateSortDewdrop(CraftFrame);
+	self:PositionCollapseAllButton();
 
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
 end
@@ -163,6 +165,13 @@ end
 ----------------------------------------------------------------------------------------------------
 -- Event Processing
 ----------------------------------------------------------------------------------------------------
+function TurtleEnchant:PositionCollapseAllButton()
+	-- Bring collapse all button to front and widen it so it's easier to click
+	if CraftCollapseAllButton then
+		CraftCollapseAllButton:SetFrameLevel(50);
+		CraftCollapseAllButton:SetWidth(50);
+	end
+end
 function TurtleEnchant:UpdateCraftFrame()
 	--Make the CraftFrame update itself it has not yet
 	if CraftFrame and CraftFrame:IsVisible() then
