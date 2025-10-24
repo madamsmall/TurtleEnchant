@@ -114,6 +114,12 @@ function TurtleEnchant:OnInitialize()
 end
 
 function TurtleEnchant:OnEnable()
+	-- Don't enable this addon at all if the enchanting skill is not present
+	if not self:CheckSkill() then
+		self:LevelDebug(1, "Enchanting skill not found, disabling TurtleEnchant");
+		return;
+	end
+
 	--Reset our saved data if it is from the old version of TurtleEnchant
 	if (not self.db.profile.Sort) then
 		self:ResetDB("profile");

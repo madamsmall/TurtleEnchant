@@ -7,7 +7,7 @@
 ## SavedVariables: TurtleEnchantDB
 ## LoadOnDemand: 1
 ## LoadWith: Blizzard_TradeSkillUI, Blizzard_CraftUI
-## X-Category: Tradeskill
+## X-Category: Tradeskill, Enchanting
 
 Libs\AceLibrary\AceLibrary.lua
 Libs\Compost-2.0\Compost-2.0.lua
