@@ -11,6 +11,8 @@ TurtleEnchant = AceLibrary("AceAddon-2.0"):new("AceDB-2.0", "AceEvent-2.0", "Ace
 local Dewdrop = AceLibrary("Dewdrop-2.0");
 local Compost = AceLibrary("Compost-2.0");
 
+-- Wait for the Enchanting window to be present before making modifications -- other windows dont count.
+local addonEnabled = false;
 --Grab the database of translations for the current spec
 local L = AceLibrary("AceLocale-2.1"):GetInstance("TurtleEnchant", true);
 
@@ -114,12 +116,6 @@ function TurtleEnchant:OnInitialize()
 end
 
 function TurtleEnchant:OnEnable()
-	-- Don't enable this addon at all if the enchanting skill is not present
-	if not self:CheckSkill() then
-		self:LevelDebug(1, "Enchanting skill not found, disabling TurtleEnchant");
-		return;
-	end
-
 	--Reset our saved data if it is from the old version of TurtleEnchant
 	if (not self.db.profile.Sort) then
 		self:ResetDB("profile");
@@ -154,9 +150,10 @@ function TurtleEnchant:OnEnable()
 
 	self:UpdateCraftFrame();
 
-	self:CreateSearchBox(CraftFrame);
-	self:CreateSortDewdrop(CraftFrame);
-	self:PositionCollapseAllButton();
+	self:CreateEnchantingModifications(CraftFrame);
+	-- self:CreateSearchBox(CraftFrame);
+	-- self:CreateSortDewdrop(CraftFrame);	
+	-- self:CreateCraftAllButton(CraftFrame);
 
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
 end
@@ -164,10 +161,31 @@ end
 function TurtleEnchant:OnDisable()
 	--Refresh the craft frame to ensure it picks up its new data
 	self:UpdateCraftFrame();
-
 	self:LevelDebug(1, "TurtleEnchant has been Disabled");
 end
 
+function TurtleEnchant:CreateEnchantingModifications(parent)
+	-- Build the buttons, searchBox, and other Enchanting Window mods IF this is actually the enchanting window
+	if (self:CheckSkill() == "ENCHANTING" or self:CheckSkill() == "Enchanting") then	
+		self:LevelDebug(2, "Creating Enchanting Modifications");
+		if not CraftFrame then
+			self:LevelDebug(2, "CraftFrame nil");
+		else			
+			self:LevelDebug(2, "CraftFrame present");			
+			self.addonEnabled = true;
+			self:CreateSearchBox(parent);
+			self:CreateSortDewdrop(parent);
+			self:PositionCollapseAllButton();
+			self:CreateCraftAllButton(parent);
+		end
+	end
+	-- Don't enable this addon at all if the enchanting skill is not present
+	if not self:CheckSkill() then
+		self:LevelDebug(1, "Enchanting skill not found, do not enable TurtleEnchant");
+		return;
+	end
+
+end
 ----------------------------------------------------------------------------------------------------
 -- Event Processing
 ----------------------------------------------------------------------------------------------------
@@ -192,7 +210,7 @@ end
 function TurtleEnchant:CRAFT_UPDATE()
 	self:LevelDebug(2, "CRAFT_UPDATE event fired, invalidating data");
 	--Invalidate our db to ensure it is not wrongfully used
-	self.UserEnchantDB.IsInvalidated = true;		
+	self.UserEnchantDB.IsInvalidated = true;	
 end
 
 ----------------------------------------------------------------------------------------------------
@@ -273,6 +291,12 @@ function TurtleEnchant:CreateUserEnchantDB()
 
 	--Just to be safe, nil out the refence to the table
 	SubTables = nil;
+
+	--Ensure our modifications are present once the user has opened the enchanting window
+	if(not self.addonEnabled) then
+		self:LevelDebug(2, "Enchanting skill open but addon not yet enabled -- do it now");
+		self:CreateEnchantingModifications(CraftFrame);
+	end
 end
 
 --Grabs the inverse of the value stored in memory, because that is the way it is stored there
@@ -824,3 +848,25 @@ function TurtleEnchant:CreateSortDewdrop(parent)
     self.sortBtn = btn
     updateText()
 end
+
+function TurtleEnchant:CreateCraftAllButton(parent)
+ 	if self.createAllButton then return end
+    parent = parent or (CraftFrame and CraftFrame) or UIParent
+
+	local btn = CreateFrame("Button", "CreateAllButton", parent, "UIPanelButtonTemplate")
+    btn:SetHeight(22)
+	btn:SetWidth(80)
+
+	 if CraftDetailScrollFrame then
+        btn:SetPoint("TOPLEFT", CraftDetailScrollFrame, "BOTTOMLEFT", 0, -9)
+    end
+
+    -- Set the button's text
+    btn:SetText("Create All")
+
+    -- Define the button's action on click
+    btn:SetScript("OnClick", function()
+        DEFAULT_CHAT_FRAME:AddMessage("MyAce2Addon: The button was clicked!", 1, 1, 0)
+    end)
+	self.createAllButton = btn
+end 
