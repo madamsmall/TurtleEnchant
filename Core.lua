@@ -151,9 +151,6 @@ function TurtleEnchant:OnEnable()
 	self:UpdateCraftFrame();
 
 	self:CreateEnchantingModifications(CraftFrame);
-	-- self:CreateSearchBox(CraftFrame);
-	-- self:CreateSortDewdrop(CraftFrame);	
-	-- self:CreateCraftAllButton(CraftFrame);
 
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
 end
@@ -176,7 +173,8 @@ function TurtleEnchant:CreateEnchantingModifications(parent)
 			self:CreateSearchBox(parent);
 			self:CreateSortDewdrop(parent);
 			self:PositionCollapseAllButton();
-			self:CreateCraftAllButton(parent);
+			-- self:CreateCraftAllButton(parent);
+			self:CreateHaveMaterialsCheckbox(parent);
 		end
 	end
 	-- Don't enable this addon at all if the enchanting skill is not present
@@ -216,6 +214,16 @@ end
 ----------------------------------------------------------------------------------------------------
 -- User Enchant DB functions
 ----------------------------------------------------------------------------------------------------
+--- craftData is a table that contains all of the data for a specific enchantment
+--- craftData[1] = name
+--- craftData[2] = icon
+--- craftData[3] = type (header if header row or difficulty of enchant)
+--- craftData[4] = number of times this enchant can be made with the current materials
+--- craftData[5] = skillLevel
+--- craftData[6] = numMade
+--- craftData[7] = numMax
+--- craftData.gameId = the actual game id for this enchantment, used to call the original functions with the correct data
+--- 
 --Recreate our temporary data from scratch
 function TurtleEnchant:CreateUserEnchantDB()
 	self:LevelDebug(2, "Creating the UserEnchantDB");
@@ -253,8 +261,9 @@ function TurtleEnchant:CreateUserEnchantDB()
 		craftData = Compost:Acquire(self.hooks.GetCraftInfo.orig(i));
 		craftData.gameId = i;
 
-		--Only add the data to the sub table if it is visible
-		if self:IsVisible(craftData) then
+		--Only add the data to the sub table if it is not filtered out by the user preferences.
+		if self:IsVisible(craftData) and self:HaveMaterials(craftData) then	
+			self:LevelDebug(2, "is visible and have materials for enchantment " .. craftData[1]);
 			--Add that data to the appropriate sub table
 			if self.db.profile.Sort == L.Armor then
 				if not self.UserEnchantDB.AllEnchants[i] then
@@ -264,7 +273,7 @@ function TurtleEnchant:CreateUserEnchantDB()
 			elseif self.db.profile.Sort == L.Bonus then
 				SubTables:insert(self.UserEnchantDB.AllEnchants[i].bonus, craftData);						
 			else
-				self:LevelDebug("Unknown Sort setting " .. self.db.profile.Sort .. " reseting to Bonus", 2);
+				self:LevelDebug("Unknown Sort setting " .. self.db.profile.Sort .. " resetting to Bonus", 2);
 				self.db.profile.Sort = L.Bonus;
 				tinsert(self.UserEnchantDB.CurrentList, craftData);
 			end
@@ -297,6 +306,13 @@ function TurtleEnchant:CreateUserEnchantDB()
 		self:LevelDebug(2, "Enchanting skill open but addon not yet enabled -- do it now");
 		self:CreateEnchantingModifications(CraftFrame);
 	end
+end
+
+function TurtleEnchant:HaveMaterials(craftData)
+	if not self.haveMatsCheckbox:GetChecked() then return true end
+
+	-- Check if we have the materials for this enchant		
+	return craftData[4] >= 1;
 end
 
 --Grabs the inverse of the value stored in memory, because that is the way it is stored there
@@ -335,8 +351,6 @@ function TurtleEnchant:VerifyUserEnchantDB()
 end
 ----------------------------------------------------------------------------------------------------
 -- Hooking functions
--- Note that any complicated functions should move the hardest code to another function in the class
--- To make this section as simple as possible (Due to its extreme size)
 --
 -- A note about why these are being hooked:
 -- We are replacing the default return values of a list of items with our own specially formatted
@@ -345,9 +359,6 @@ end
 --
 -- Quick note about things that are pretty standard across functions
 -- Always check title of display to ensure we are not in the pet window, which uses the same frame
---
--- Note to myself:
--- Need to organize these in some more logical fashion
 ----------------------------------------------------------------------------------------------------
 --------------------------------------------------
 -- Overall functions, return basic data
@@ -536,7 +547,7 @@ function TurtleEnchant:GetCraftDescription(id)
 end
 
 function TurtleEnchant:GetCraftNumReagents(id)
-	self:LevelDebug(3, "GetCraftNumReagents called");
+	self:LevelDebug(2, "GetCraftNumReagents called with gameId = " .. tostring(id));
 	if not self:CheckSkill() then return self.hooks.GetCraftNumReagents.orig(id); end
 	self:VerifyUserEnchantDB();
 	
@@ -605,7 +616,7 @@ end
 -- May later make these more verbouse
 --------------------------------------------------
 function TurtleEnchant:GetCraftItemLink(id)
-	self:LevelDebug(3, "GetCraftItemLink called");
+	self:LevelDebug(2, "GetCraftItemLink called with id = " .. tostring(id));
 	if not self:CheckSkill() then return self.hooks.GetCraftItemLink.orig(id); end
 	self:VerifyUserEnchantDB();
 	
@@ -626,7 +637,7 @@ function TurtleEnchant:GetCraftItemLink(id)
 end
 
 function TurtleEnchant:GetCraftReagentItemLink(id, reagentId)
-	self:LevelDebug(3, "GetCraftReagentItemLink called");
+	self:LevelDebug(2, "GetCraftReagentItemLink called with id = " .. tostring(id) .. " reagentId = " .. tostring(reagentId));
 	if not self:CheckSkill() then return self.hooks.GetCraftReagentItemLink.orig(id, reagentId); end
 	self:VerifyUserEnchantDB();
 	
@@ -750,6 +761,8 @@ function TurtleEnchant:CreateSearchBox(parent)
         local txt = sb:GetText() or ""
         if txt == "" then label:Show() else label:Hide() end
         self:SetSearchFilter(txt)
+		-- Reset scroll to top when search changes or the window can appear to be empty if the user had been scrolled down
+		CraftListScrollFrame:SetVerticalScroll(0)
         if self.UserEnchantDB then self.UserEnchantDB.IsInvalidated = true end
         self:UpdateCraftFrame()
     end)
@@ -764,6 +777,14 @@ end
 
 function TurtleEnchant:GetSearchFilter()
     return self.filter
+end
+
+function TurtleEnchant:SetMaterialFilter(checked)
+	self.haveMatsFilter = checked;
+end
+
+function TurtleEnchant:GetMaterialFilter()
+	return self.haveMatsFilter;
 end
 
 -- Create a Dewdrop-2.0 sort button that opens the menu below the button, toggles and closes on outside click.
@@ -847,6 +868,32 @@ function TurtleEnchant:CreateSortDewdrop(parent)
 
     self.sortBtn = btn
     updateText()
+end
+
+function TurtleEnchant:CreateHaveMaterialsCheckbox(parent)
+	if self.haveMatsCheckbox then return end
+	parent = parent or (CraftFrame and CraftFrame) or UIParent
+
+	local cb = CreateFrame("CheckButton", "TurtleEnchantHaveMatsCheckbox", parent, "UICheckButtonTemplate")
+	cb:SetWidth(20)
+	cb:SetHeight(20)
+	cb:SetPoint("TOPLEFT", parent, "TOP", 50, -8)
+
+	local label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+	label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
+	label:SetText("Have Materials")
+
+	cb:SetScript("OnClick", function()
+		local checked = cb:GetChecked()
+
+		CraftListScrollFrame:SetVerticalScroll(0)
+		
+		self.haveMatsFilter = checked
+		if self.UserEnchantDB then self.UserEnchantDB.IsInvalidated = true end
+		self:UpdateCraftFrame()
+	end)
+
+	self.haveMatsCheckbox = cb
 end
 
 function TurtleEnchant:CreateCraftAllButton(parent)
