@@ -29,7 +29,7 @@ TurtleEnchant:RegisterDefaults("profile", {
 ----------------------------------------------------------------------------------------------------
 function TurtleEnchant:OnInitialize()
 	--Define a debug level to a level that does not completly spam the user with stuff from us
-	self:SetDebugLevel(1);
+	self:SetDebugLevel(2);
 	
 	self.ArmorSubTypes = {
 		INVTYPE_FEET = 1,
@@ -172,9 +172,10 @@ function TurtleEnchant:CreateEnchantingModifications(parent)
 			self.addonEnabled = true;
 			self:CreateSearchBox(parent);
 			self:CreateSortDewdrop(parent);
-			self:PositionCollapseAllButton();
-			-- self:CreateCraftAllButton(parent);
+			self:PositionCollapseAllButton();			
 			self:CreateHaveMaterialsCheckbox(parent);
+			self:CreateCreateAllButton(parent);
+			self:UpdateCreateAllButton();
 		end
 	end
 	-- Don't enable this addon at all if the enchanting skill is not present
@@ -206,7 +207,7 @@ function TurtleEnchant:UpdateCraftFrame()
 end
 
 function TurtleEnchant:CRAFT_UPDATE()
-	self:LevelDebug(2, "CRAFT_UPDATE event fired, invalidating data");
+	self:LevelDebug(3, "CRAFT_UPDATE event fired, invalidating data");
 	--Invalidate our db to ensure it is not wrongfully used
 	self.UserEnchantDB.IsInvalidated = true;	
 end
@@ -215,18 +216,18 @@ end
 -- User Enchant DB functions
 ----------------------------------------------------------------------------------------------------
 --- craftData is a table that contains all of the data for a specific enchantment
---- craftData[1] = name
+--- craftData[1] = name -- for headers, the header name (e.g. "Boots"). For crafts, the spell name (e.g. "Enchant Boots - Minor Speed")
 --- craftData[2] = icon
 --- craftData[3] = type (header if header row or difficulty of enchant)
---- craftData[4] = number of times this enchant can be made with the current materials
---- craftData[5] = skillLevel
---- craftData[6] = numMade
---- craftData[7] = numMax
+--- craftData[4] = numAvailable (number). Number of times this enchant can be made with the current materials
+--- craftData[5] = skillLevel of the enchant in relation to the user's skill (e.g. Optimal, Medium)
+--- craftData[6] = unused
+--- craftData[7] = unused
 --- craftData.gameId = the actual game id for this enchantment, used to call the original functions with the correct data
 --- 
 --Recreate our temporary data from scratch
 function TurtleEnchant:CreateUserEnchantDB()
-	self:LevelDebug(2, "Creating the UserEnchantDB");
+	self:LevelDebug(3, "Creating the UserEnchantDB");
 	--Clear out the invalidated flag, this is not part of any of the bottom databases
 	self.UserEnchantDB.IsInvalidated = false;
 	--Clear all of our databases, to ensure that we start fresh
@@ -245,7 +246,7 @@ function TurtleEnchant:CreateUserEnchantDB()
 		if EnchantValue then
 			tinsert(self.UserEnchantDB.AllEnchants, EnchantValue);
 		else
-			self:Print("Could not find value " .. EnchantId .. " which is part of " .. self.hooks.GetCraftItemLink.orig(i) .. " please contact the author with these details.");
+			self:LevelDebug(2, "Could not find value " .. EnchantId .. " which is part of " .. self.hooks.GetCraftItemLink.orig(i) .. " please contact the author with these details.");
 		end
 	end
 
@@ -260,10 +261,12 @@ function TurtleEnchant:CreateUserEnchantDB()
 		--Create a table with the data for the current enchant in it
 		craftData = Compost:Acquire(self.hooks.GetCraftInfo.orig(i));
 		craftData.gameId = i;
+		local armor = self.UserEnchantDB.AllEnchants[i].armor		
+		craftData.isItem = (armor == 8 or armor == 9 or armor == 10);
 
 		--Only add the data to the sub table if it is not filtered out by the user preferences.
 		if self:IsVisible(craftData) and self:HaveMaterials(craftData) then	
-			self:LevelDebug(2, "is visible and have materials for enchantment " .. craftData[1]);
+			self:LevelDebug(3, "is visible and have materials for enchantment " .. craftData[1]);
 			--Add that data to the appropriate sub table
 			if self.db.profile.Sort == L.Armor then
 				if not self.UserEnchantDB.AllEnchants[i] then
@@ -364,6 +367,10 @@ end
 -- Overall functions, return basic data
 -- Hooked to return data we have instead
 --------------------------------------------------
+
+-- Returns the number of crafts in the current profession window.
+-- Inputs: none.
+-- Returns: integer.
 function TurtleEnchant:GetNumCrafts()
 	self:LevelDebug(3, "GetNumCrafts called");
 	if not self:CheckSkill() then return self.hooks.GetNumCrafts.orig(); end
@@ -374,6 +381,12 @@ function TurtleEnchant:GetNumCrafts()
 	return self.UserEnchantDB.CurrentList.n;
 end
 
+-- Returns info about a craft.
+-- Inputs:
+
+-- index (integer): craft index (1-based).
+-- Returns:
+-- name (string), texture (string), isHeader (bool), numAvailable (int), isExpanded (bool), ...
 function TurtleEnchant:GetCraftInfo(id)
 	self:LevelDebug(3, "GetCraftInfo called");
 	if not self:CheckSkill() then return self.hooks.GetCraftInfo.orig(id); end
@@ -451,6 +464,9 @@ function TurtleEnchant:SelectCraft(id)
 
 	--Clear any hidden selection we have
 	self.HiddenSelection = nil;
+
+	--Update the Create All button state
+	self:UpdateCreateAllButton();
 end
 
 --Selects a skill by its name, returns whether the operation succeded or not
@@ -488,17 +504,26 @@ function TurtleEnchant:DoCraft(id)
 	if not self:CheckSkill() then return self.hooks.DoCraft.orig(id); end
 	self:VerifyUserEnchantDB();
 	
+	    -- If cursor is targeting something, stop targeting first
+    if SpellIsTargeting and SpellIsTargeting() then
+        SpellStopTargeting()
+    end
+	
 	--If we have a selection that is not on screen, use it
 	if self.HiddenSelection and not id then
 		if self.HiddenSelection.gameId then
+			self:LevelDebug(2, "DoCraft using hidden selection with gameId = " .. tostring(self.HiddenSelection.gameId));
 			return self.hooks.DoCraft.orig(self.HiddenSelection.gameId);
 		else
+			self:LevelDebug(2, "DoCraft could not find gameId for hidden selection");
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
+			self:LevelDebug(2, "DoCraft using current list with gameId = " .. tostring(self.UserEnchantDB.CurrentList[id].gameId));
 			return self.hooks.DoCraft.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
+			self:LevelDebug(2, "DoCraft could not find gameId for id = " .. tostring(id));
 			return;
 		end
 	end
@@ -517,7 +542,7 @@ function TurtleEnchant:GetCraftIcon(id)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftIcon.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return;
@@ -538,7 +563,7 @@ function TurtleEnchant:GetCraftDescription(id)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftDescription.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return;
@@ -547,7 +572,7 @@ function TurtleEnchant:GetCraftDescription(id)
 end
 
 function TurtleEnchant:GetCraftNumReagents(id)
-	self:LevelDebug(2, "GetCraftNumReagents called with gameId = " .. tostring(id));
+	self:LevelDebug(3, "GetCraftNumReagents called with gameId = " .. tostring(id));
 	if not self:CheckSkill() then return self.hooks.GetCraftNumReagents.orig(id); end
 	self:VerifyUserEnchantDB();
 	
@@ -559,7 +584,7 @@ function TurtleEnchant:GetCraftNumReagents(id)
 			return 0;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftNumReagents.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return 0;
@@ -580,7 +605,7 @@ function TurtleEnchant:GetCraftReagentInfo(id, reagentId)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftReagentInfo.orig(self.UserEnchantDB.CurrentList[id].gameId, reagentId);
 		else
 			return;
@@ -601,7 +626,7 @@ function TurtleEnchant:GetCraftSpellFocus(id)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftSpellFocus.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return;
@@ -616,7 +641,7 @@ end
 -- May later make these more verbouse
 --------------------------------------------------
 function TurtleEnchant:GetCraftItemLink(id)
-	self:LevelDebug(2, "GetCraftItemLink called with id = " .. tostring(id));
+	self:LevelDebug(3, "GetCraftItemLink called with id = " .. tostring(id));
 	if not self:CheckSkill() then return self.hooks.GetCraftItemLink.orig(id); end
 	self:VerifyUserEnchantDB();
 	
@@ -628,16 +653,16 @@ function TurtleEnchant:GetCraftItemLink(id)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftItemLink.orig(self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return;
-		end
+		end		
 	end
 end
 
 function TurtleEnchant:GetCraftReagentItemLink(id, reagentId)
-	self:LevelDebug(2, "GetCraftReagentItemLink called with id = " .. tostring(id) .. " reagentId = " .. tostring(reagentId));
+	self:LevelDebug(3, "GetCraftReagentItemLink called with id = " .. tostring(id) .. " reagentId = " .. tostring(reagentId));
 	if not self:CheckSkill() then return self.hooks.GetCraftReagentItemLink.orig(id, reagentId); end
 	self:VerifyUserEnchantDB();
 	
@@ -649,7 +674,7 @@ function TurtleEnchant:GetCraftReagentItemLink(id, reagentId)
 			return;
 		end
 	else --Otherwise, use the Selected index
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks.GetCraftReagentItemLink.orig(self.UserEnchantDB.CurrentList[id].gameId, reagentId);
 		else
 			return;
@@ -674,7 +699,7 @@ function TurtleEnchant:TooltipSetCraftItem(tooltip, id, reagentId)
 			return;
 		end
 	else
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks[tooltip].SetCraftItem.orig(tooltip, self.UserEnchantDB.CurrentList[id].gameId, reagentId);
 		else
 			return;
@@ -695,7 +720,7 @@ function TurtleEnchant:TooltipSetCraftSpell(tooltip, id)
 			return;
 		end
 	else
-		if self.UserEnchantDB.CurrentList[id].gameId then
+		if self.UserEnchantDB and self.UserEnchantDB.CurrentList and self.UserEnchantDB.CurrentList[id] and self.UserEnchantDB.CurrentList[id].gameId then
 			return self.hooks[tooltip].SetCraftSpell.orig(tooltip, self.UserEnchantDB.CurrentList[id].gameId);
 		else
 			return;
@@ -896,7 +921,132 @@ function TurtleEnchant:CreateHaveMaterialsCheckbox(parent)
 	self.haveMatsCheckbox = cb
 end
 
-function TurtleEnchant:CreateCraftAllButton(parent)
+function TurtleEnchant:CreateAll()
+	local selectedIndex = self:GetCraftSelectionIndex()
+	
+	if selectedIndex and selectedIndex > 0 then
+		local entry = TurtleEnchant.UserEnchantDB and TurtleEnchant.UserEnchantDB.CurrentList and TurtleEnchant.UserEnchantDB.CurrentList[selectedIndex]
+		self:LevelDebug(2, "Entry for UI index " .. tostring(selectedIndex) .. " is " .. tostring(entry and entry[1] or "nil"));
+		 -- If using mapping, get the gameId from our database
+		if entry and entry.gameId then
+			local max = entry[4]
+			self:LevelDebug(2, "Attempting to create all " .. entry[1] .. ", should make " .. tostring(max));
+			-- for i = 1, max do
+			-- 	self:DoCraft(selectedIndex)
+			-- end		
+			self._createAll = {
+				active = true,
+				index = selectedIndex,   -- Blizzard index (not our filtered index)
+				remaining = max,
+				running = false,
+			}
+
+			-- ensure events are registered (AceEvent-2.0)
+			if not self._createAllEventsRegistered then
+				self:RegisterEvent("SPELLCAST_STOP", "OnCreateAllSpellStop")
+				self:RegisterEvent("SPELLCAST_FAILED", "OnCreateAllSpellFailed")
+				self:RegisterEvent("SPELLCAST_INTERRUPTED", "OnCreateAllSpellFailed")
+				self:RegisterEvent("SPELLCAST_START", "OnSpellcastStart")
+				-- channel crafts use channel events; 1.12 has SPELLCAST_CHANNEL_STOP
+				self._createAllEventsRegistered = true
+			end
+
+			-- kick off first craft
+			self:CreateAllNext(0)
+		end
+	end
+end
+
+function TurtleEnchant:OnEnchantSpellSelected()
+	self:LevelDebug(2, "Enchant selected event received with args: " .. tostring(arg1) .. ", " .. tostring(arg2));
+end
+function TurtleEnchant:OnEnchantSpellCompleted()
+	self:LevelDebug(2, "Enchant completed event received with args: " .. tostring(arg1) .. ", " .. tostring(arg2));
+end
+
+-- Fired when a spellcast is begun. This event seems to work if the spell has a casting time. For instant, there is no SPELLCAST_START but SPELLCAST_STOP.
+-- arg1: Spell Name
+-- arg2: Duration (arg2 seems to be in milliseconds ex. 1.5 second cast time shows as 1500
+function TurtleEnchant:OnSpellcastStart()
+	self:LevelDebug(2, "Spellcast start event received with args: " .. tostring(arg1) .. ", " .. tostring(arg2));
+end
+
+-- Fire next craft in the creation queue (single step)
+function TurtleEnchant:CreateAllNext(delay)
+	local creationQueue = self._createAll
+	if not creationQueue or not creationQueue.remaining then 
+		self:LevelDebug(2, "CreateAllNext aborted (no remaining crafts).")
+		return 
+	end
+
+	self:LevelDebug(2, "CreateAllNext called with " .. tostring(creationQueue.remaining) .. " remaining. Delay = " .. tostring(delay));
+	
+	if delay and delay > 0 then
+		self:LevelDebug(2, "CreateAllNext delaying for " .. tostring(delay) .. " seconds.");
+        return self:After(delay, function() self:CreateAllNext(0) end)
+    end
+
+    if not creationQueue or not creationQueue.active then return end
+    if creationQueue.remaining <= 0 then
+        self._createAll = nil
+        self:LevelDebug(2, "Create All finished.")
+        return
+    end
+    -- sanity: if frame not shown anymore, abort
+    if not self:CheckSkill() or not CraftFrame or not CraftFrame:IsShown() then
+        self._createAll = nil
+        self:LevelDebug(2, "Create All aborted (craft frame closed).")
+        return
+    end
+    -- attempt to cast one craft
+    creationQueue.running = true
+    self:DoCraft(creationQueue.index)
+end
+
+-- Run a function after `delay` seconds (AceEvent if available; else OnUpdate fallback)
+function TurtleEnchant:After(delay, callback)
+    if type(callback) ~= "function" then return end
+    delay = tonumber(delay) or 0
+    if delay <= 0 then
+        -- immediate
+        local ok, err = pcall(callback)
+        if not ok then self:LevelDebug(1, "After callback error: "..tostring(err)) end
+        return
+    end
+    -- AceEvent-2.0 path (many Ace2 addons have this)
+    if self.ScheduleEvent then
+        self:ScheduleEvent("TE_After_"..math.random(1, 9999999), function()
+            local ok, err = pcall(callback)
+            if not ok then self:LevelDebug(1, "After callback error: "..tostring(err)) end
+        end, delay)
+        return
+    end
+	self:LevelDebug(2, "After called with delay")
+end
+
+-- Event: craft finished successfully (covers normal and channeled)
+function TurtleEnchant:OnCreateAllSpellStop()
+	self:LevelDebug(2, "Spell stop event received.");
+    local creationQueue = self._createAll
+    if not creationQueue or not creationQueue.active or not creationQueue.running then return end
+
+    creationQueue.running = false
+    creationQueue.remaining = (creationQueue.remaining or 1) - 1
+
+	self:LevelDebug(2, "Create All called from spellstop event.");
+	self:CreateAllNext(3)	
+end
+
+-- Event: craft failed or was interrupted; stop the queue
+function TurtleEnchant:OnCreateAllSpellFailed()
+	self:LevelDebug(2, "Spell failed or interrupted event received.");
+    local creationQueue = self._createAll
+    if not creationQueue or not creationQueue.active then return end
+    self._createAll = nil
+    self:LevelDebug(2,"Spell stopped (failed or interrupted).")
+end
+
+function TurtleEnchant:CreateCreateAllButton(parent)
  	if self.createAllButton then return end
     parent = parent or (CraftFrame and CraftFrame) or UIParent
 
@@ -904,7 +1054,7 @@ function TurtleEnchant:CreateCraftAllButton(parent)
     btn:SetHeight(22)
 	btn:SetWidth(80)
 
-	 if CraftDetailScrollFrame then
+	if CraftDetailScrollFrame then
         btn:SetPoint("TOPLEFT", CraftDetailScrollFrame, "BOTTOMLEFT", 0, -9)
     end
 
@@ -913,7 +1063,32 @@ function TurtleEnchant:CreateCraftAllButton(parent)
 
     -- Define the button's action on click
     btn:SetScript("OnClick", function()
-        DEFAULT_CHAT_FRAME:AddMessage("MyAce2Addon: The button was clicked!", 1, 1, 0)
+        self:CreateAll()
     end)
 	self.createAllButton = btn
 end 
+
+-- Enable/disable the Create All button based on selection and reagents
+function TurtleEnchant:UpdateCreateAllButton()
+    local btn = self.createAllButton
+    if not btn then return end
+
+    local selectedIndex = self:GetCraftSelectionIndex()
+    local enable = false
+    if selectedIndex and selectedIndex > 0 then
+		local entry = TurtleEnchant.UserEnchantDB and TurtleEnchant.UserEnchantDB.CurrentList and TurtleEnchant.UserEnchantDB.CurrentList[selectedIndex]
+
+		-- only enable for item-producing crafts
+		if entry and entry.isItem then			
+			local max = entry[4]
+			enable = (max and max > 0)
+			self:LevelDebug(2, entry[1] .. " is an item-producing craft with max " .. tostring(max));
+		end
+    end
+
+    if enable then
+        btn:Enable()
+    else
+        btn:Disable()
+    end
+end
