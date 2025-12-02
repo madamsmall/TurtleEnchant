@@ -31,8 +31,6 @@ function TurtleEnchant:OnInitialize()
 	--Define a debug level to a level that does not completly spam the user with stuff from us
 	self:SetDebugLevel(2);
 	
-	self.otherMoney = 0;
-
 	self.ArmorSubTypes = {
 		INVTYPE_FEET = 1,
 		INVTYPE_WRIST = 2,
@@ -127,11 +125,6 @@ function TurtleEnchant:OnEnable()
 	--This event also triggers whenever the window is opened, so we need not worry
 	--About any other events
 	self:RegisterEvent("CRAFT_UPDATE");
-
-	-- Post to chat window when we receive money in trade
-	self:RegisterEvent("PLAYER_TRADE_MONEY")
-	self:RegisterEvent("TRADE_MONEY_CHANGED")
-	self:RegisterEvent("TRADE_ACCEPT_UPDATE")
 
 	--Catch the profile change event so we can close the GUI to ensure it is updated
 	self:RegisterEvent("ACE_PROFILE_LOADED", "UpdateCraftFrame");
