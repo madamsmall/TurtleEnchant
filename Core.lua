@@ -150,6 +150,7 @@ function TurtleEnchant:OnEnable()
 
 	self:UpdateCraftFrame();
 
+	self:GetCraftFrameDimensions();
 	self:CreateEnchantingModifications(CraftFrame);
 
 	self:LevelDebug(1, "TurtleEnchant has been Enabled");
@@ -161,6 +162,29 @@ function TurtleEnchant:OnDisable()
 	self:LevelDebug(1, "TurtleEnchant has been Disabled");
 end
 
+function TurtleEnchant:GetCraftFrameDimensions()
+	if CraftFrame:GetWidth() < 400 and CraftFrame:GetHeight() < 513 then
+		-- this is probably the normal enchanting window, no pfui etc Place elements where they belong for normal window
+		self.searchBoxOffsetX = 75
+		self.searchBoxOffsetY = -72
+		self.searchBoxWidth = 160
+		self.searchBoxHeight = 20
+		self.matsCheckboxOffsetX = 50
+		self.matsCheckboxOffsetY = -55
+		self.matsCheckboxWidth = 20
+		self.matsCheckboxHeight = 20		
+	else
+		-- the only other thing I support is a pfui window, so putting my things in spots based on that layout
+		self.searchBoxOffsetX = 60
+		self.searchBoxOffsetY = -37
+		self.searchBoxWidth = 180
+		self.searchBoxHeight = 20
+		self.matsCheckboxOffsetX = 50
+		self.matsCheckboxOffsetY = -8
+		self.matsCheckboxWidth = 20
+		self.matsCheckboxHeight = 20		
+	end	
+end
 function TurtleEnchant:CreateEnchantingModifications(parent)
 	-- Build the buttons, searchBox, and other Enchanting Window mods IF this is actually the enchanting window
 	if (self:CheckSkill() == "ENCHANTING" or self:CheckSkill() == "Enchanting") then	
@@ -730,14 +754,14 @@ function TurtleEnchant:CreateSearchBox(parent)
     -- ensure a valid parent; CraftFrame is the enchanting UI
     parent = parent or (CraftFrame and CraftFrame) or UIParent
 
-    local sb = CreateFrame("EditBox", "TurtleEnchantSearchBox", parent, "InputBoxTemplate")
+    local sb = CreateFrame("EditBox", "TurtleEnchantSearchBox", parent, "InputBoxTemplate")	
     if sb.SetSize then
-        sb:SetSize(180, 20)
+        sb:SetSize(self.searchBoxWidth, self.searchBoxHeight)
     else
-        sb:SetWidth(180)
-        sb:SetHeight(20)
+        sb:SetWidth(self.searchBoxWidth)
+        sb:SetHeight(self.searchBoxHeight)
     end
-    sb:SetPoint("TOPLEFT", parent, "TOPLEFT", 60, -37) -- adjust offsets as needed
+    sb:SetPoint("TOPLEFT", parent, "TOPLEFT", self.searchBoxOffsetX, self.searchBoxOffsetY) -- adjust offsets as needed
 
     sb:SetParent(parent)
     if parent.GetFrameLevel and sb.SetFrameLevel then
@@ -895,9 +919,9 @@ function TurtleEnchant:CreateHaveMaterialsCheckbox(parent)
 	parent = parent or (CraftFrame and CraftFrame) or UIParent
 
 	local cb = CreateFrame("CheckButton", "TurtleEnchantHaveMatsCheckbox", parent, "UICheckButtonTemplate")
-	cb:SetWidth(20)
-	cb:SetHeight(20)
-	cb:SetPoint("TOPLEFT", parent, "TOP", 50, -8)
+	cb:SetWidth(self.matsCheckboxWidth)
+	cb:SetHeight(self.matsCheckboxHeight)
+	cb:SetPoint("TOPLEFT", parent, "TOP", self.matsCheckboxOffsetX, self.matsCheckboxOffsetY)
 
 	local label = cb:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 	label:SetPoint("LEFT", cb, "RIGHT", 2, 0)
