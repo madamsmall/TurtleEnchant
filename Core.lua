@@ -163,18 +163,8 @@ function TurtleEnchant:OnDisable()
 end
 
 function TurtleEnchant:GetCraftFrameDimensions()
-	if CraftFrame:GetWidth() < 400 and CraftFrame:GetHeight() < 513 then
-		-- this is probably the normal enchanting window, no pfui etc Place elements where they belong for normal window
-		self.searchBoxOffsetX = 75
-		self.searchBoxOffsetY = -72
-		self.searchBoxWidth = 160
-		self.searchBoxHeight = 20
-		self.matsCheckboxOffsetX = 50
-		self.matsCheckboxOffsetY = -55
-		self.matsCheckboxWidth = 20
-		self.matsCheckboxHeight = 20		
-	else
-		-- the only other thing I support is a pfui window, so putting my things in spots based on that layout
+	if pfUI then 
+		-- pfUI is present, so use those dimensions. This is the only layout I support aside from vanilla at this time
 		self.searchBoxOffsetX = 60
 		self.searchBoxOffsetY = -37
 		self.searchBoxWidth = 180
@@ -183,8 +173,20 @@ function TurtleEnchant:GetCraftFrameDimensions()
 		self.matsCheckboxOffsetY = -8
 		self.matsCheckboxWidth = 20
 		self.matsCheckboxHeight = 20		
-	end	
+		return
+	else
+		-- hopefully this is the normal enchanting window, no pfui etc Place elements where they belong for normal window
+		self.searchBoxOffsetX = 75
+		self.searchBoxOffsetY = -72
+		self.searchBoxWidth = 160
+		self.searchBoxHeight = 20
+		self.matsCheckboxOffsetX = 50
+		self.matsCheckboxOffsetY = -55
+		self.matsCheckboxWidth = 20
+		self.matsCheckboxHeight = 20		
+	end
 end
+
 function TurtleEnchant:CreateEnchantingModifications(parent)
 	-- Build the buttons, searchBox, and other Enchanting Window mods IF this is actually the enchanting window
 	if (self:CheckSkill() == "ENCHANTING" or self:CheckSkill() == "Enchanting") then	
