@@ -163,19 +163,7 @@ function TurtleEnchant:OnDisable()
 end
 
 function TurtleEnchant:GetCraftFrameDimensions()
-	if pfUI then 
-		-- pfUI is present, so use those dimensions. This is the only layout I support aside from vanilla at this time
-		self.searchBoxOffsetX = 60
-		self.searchBoxOffsetY = -37
-		self.searchBoxWidth = 180
-		self.searchBoxHeight = 20
-		self.matsCheckboxOffsetX = 50
-		self.matsCheckboxOffsetY = -8
-		self.matsCheckboxWidth = 20
-		self.matsCheckboxHeight = 20		
-		return
-	else
-		-- hopefully this is the normal enchanting window, no pfui etc Place elements where they belong for normal window
+	-- basic vanilla placement
 		self.searchBoxOffsetX = 75
 		self.searchBoxOffsetY = -72
 		self.searchBoxWidth = 160
@@ -183,7 +171,17 @@ function TurtleEnchant:GetCraftFrameDimensions()
 		self.matsCheckboxOffsetX = 50
 		self.matsCheckboxOffsetY = -55
 		self.matsCheckboxWidth = 20
-		self.matsCheckboxHeight = 20		
+		self.matsCheckboxHeight = 20	
+
+	if CraftFrame:GetWidth() > 400 then 
+		-- an addon is widening the frame, so we need to adjust our placements. I am using the standard width used by pfui, but this may still be bad on untested addons.
+		self.searchBoxOffsetX = 60
+		self.searchBoxOffsetY = -37
+		self.searchBoxWidth = 180				
+		self.matsCheckboxOffsetY = -8		
+		return
+	else
+			
 	end
 end
 
